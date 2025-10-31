@@ -5,7 +5,7 @@ Memory-efficient average age calculator using generators
 
 import csv
 
-def stream_user_ages(filename="user_data.csv"):
+def stream_userages(filename="user_data.csv"):
     """Generator that yields user ages one by one from the CSV file"""
     with open(filename, newline='', encoding="utf-8") as csvfile:
         reader = csv.DictReader(csvfile)
@@ -21,7 +21,7 @@ def calculate_average_age():
     total_age = 0
     count = 0
 
-    for age in stream_user_ages():
+    for age in stream_userages():
         total_age += age
         count += 1
 
