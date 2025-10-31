@@ -1,20 +1,19 @@
 #!/usr/bin/python3
 """
 seed_db.py - Setup script for ALX_prodev database and user_data table.
+Creates database, table, and populates it with data from user_data.csv
 """
 
 import mysql.connector
 from mysql.connector import Error
 import csv
 import uuid
-import os 
-# It's better to use environment variables for sensitive info, 
-# but for this script, we'll use a placeholder variable.
+import os
 
 # --- CONFIGURATION ---
 DB_HOST = "localhost"
 DB_USER = "root"
-DB_PASSWORD = "root"  # Use a secure password or environment variable in production
+DB_PASSWORD = "RT9300rt"   # ⚠️ Replace with your MySQL root password if different
 DATABASE_NAME = "ALX_prodev"
 CSV_FILE = "user_data.csv"
 # ---------------------
@@ -23,21 +22,28 @@ CSV_FILE = "user_data.csv"
 def connect(database=None):
     """
     Connect to MySQL server or a specific database.
-    If database is None, connects without selecting a database (for creation).
+    If no database is provided, connects to the server only.
     """
     try:
-        connection = mysql.connector.connect(
-            host="localhost",
-    user="root",
-    password="RT9300rt",
-    database="world"
-if database else None
-        )
+        if database:
+            connection = mysql.connector.connect(
+                host=DB_HOST,
+                user=DB_USER,
+                password=DB_PASSWORD,
+                database=database
+            )
+        else:
+            connection = mysql.connector.connect(
+                host=DB_HOST,
+                user=DB_USER,
+                password=DB_PASSWORD
+            )
+
         if connection.is_connected():
-            print(f"Connected to MySQL {'server' if not database else database} successfully!")
+            print(f"✅ Connected to MySQL {'server' if not database else database} successfully!")
             return connection
     except Error as e:
-        print(f"Error connecting to MySQL: {e}")
+        print(f"❌ Error connecting to MySQL: {e}")
     return None
 
 
@@ -45,21 +51,19 @@ def create_database(connection):
     """Create the ALX_prodev database if it doesn't exist."""
     if not connection:
         return
-        
     try:
         cursor = connection.cursor()
         cursor.execute(f"CREATE DATABASE IF NOT EXISTS {DATABASE_NAME};")
-        print(f"Database {DATABASE_NAME} created or already exists.")
+        print(f"📘 Database '{DATABASE_NAME}' created or already exists.")
         cursor.close()
     except Error as e:
-        print(f"Error creating database: {e}")
+        print(f"❌ Error creating database: {e}")
 
 
 def create_table(connection):
-    """Create user_data table if it doesn't exist."""
+    """Create the user_data table if it doesn't exist."""
     if not connection:
         return
-
     try:
         cursor = connection.cursor()
         cursor.execute("""
@@ -70,88 +74,79 @@ def create_table(connection):
                 age INT NOT NULL
             );
         """)
-        # Added UNIQUE constraint to email for better database integrity
-        print("Table user_data created successfully")
+        print("🧱 Table 'user_data' created or already exists.")
         cursor.close()
     except Error as e:
-        print(f"Error creating table: {e}")
+        print(f"❌ Error creating table: {e}")
 
 
 def insert_data(connection, csv_file):
-    """Insert data from user_data.csv into the user_data table."""
+    """Insert data from user_data.csv into user_data table."""
     if not connection:
         return
-
     try:
-        cursor = connection.cursor()
-        
-        # Check if CSV file exists
         if not os.path.exists(csv_file):
-            print(f"File {csv_file} not found. Skipping data insertion.")
+            print(f"⚠️ File '{csv_file}' not found. Skipping data insertion.")
             return
 
+        cursor = connection.cursor()
         with open(csv_file, mode='r', encoding='utf-8') as f:
             reader = csv.DictReader(f)
-            
             for row in reader:
                 user_id = str(uuid.uuid4())
                 name = row['name']
                 email = row['email']
-                age = row['age']
+                age = int(row['age'])
 
-                # The SELECT query is now implicitly handled by the UNIQUE constraint,
-                # but an INSERT IGNORE or ON DUPLICATE KEY UPDATE is cleaner.
-                # Since we want to avoid duplicates and the table now has UNIQUE email:
-                
-                insert_query = """
-                    INSERT INTO user_data (user_id, name, email, age) 
+                query = """
+                    INSERT INTO user_data (user_id, name, email, age)
                     VALUES (%s, %s, %s, %s)
-                    ON DUPLICATE KEY UPDATE name=name; -- Simple way to avoid error on duplicate email
+                    ON DUPLICATE KEY UPDATE name=VALUES(name);
                 """
-                
-                # NOTE: We use INT for age, as DECIMAL is better suited for floating-point numbers.
-                cursor.execute(
-                    insert_query,
-                    (user_id, name, email, int(age)) 
-                )
-        
+                cursor.execute(query, (user_id, name, email, age))
+
         connection.commit()
-        print("Data inserted successfully.")
+        print("✅ Data inserted successfully!")
         cursor.close()
     except Error as e:
-        print(f"Error inserting data: {e}")
+        print(f"❌ Error inserting data: {e}")
     except ValueError:
-        print(f"Error: Age value '{age}' in CSV is not a valid integer.")
+        print(f"⚠️ Invalid age value in CSV file.")
     except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+        print(f"⚠️ Unexpected error: {e}")
+
+
+def connect_to_prodev():
+    """Helper function for generator scripts to connect directly to ALX_prodev."""
+    return connect(DATABASE_NAME)
 
 
 def main():
-    """Main execution function to set up the database and seed data."""
-    
-    # 1. Connect to MySQL server (without a database specified)
+    """Main function to create database, table, and insert data."""
+    # Step 1: Connect to MySQL server
     server_conn = connect()
     if not server_conn:
-        print("Exiting script due to connection failure.")
+        print("❌ Could not connect to MySQL server. Exiting.")
         return
 
-    # 2. Create the target database
+    # Step 2: Create the database
     create_database(server_conn)
     server_conn.close()
 
-    # 3. Connect directly to the newly created database
-    db_conn = connect(database=DATABASE_NAME)
+    # Step 3: Connect to the ALX_prodev database
+    db_conn = connect(DATABASE_NAME)
     if not db_conn:
-        print(f"Exiting script. Could not connect to {DATABASE_NAME}.")
+        print(f"❌ Could not connect to '{DATABASE_NAME}'. Exiting.")
         return
 
-    # 4. Create the table and insert data
+    # Step 4: Create table and insert data
     create_table(db_conn)
     insert_data(db_conn, CSV_FILE)
-    
-    # 5. Close the database connection
+
+    # Step 5: Close the connection
     db_conn.close()
-    print("Database connection closed. Setup complete.")
+    print("✅ Setup complete. Database connection closed.")
+
 
 if __name__ == "__main__":
     main()
